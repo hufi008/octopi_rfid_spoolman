@@ -25,7 +25,7 @@ def uid_to_hex(uid_integer):
 
 def find_spool_by_uid(spoolman_url, card_uid):
     url = f"{spoolman_url}/api/v1/spool"
-    params = {"extra.card_uids": f'"{card_uid}"'}
+    params = {"extra.card_uids": card_uid}
     try:
         res = requests.get(url, params=params)
         if res.status_code == 200:
