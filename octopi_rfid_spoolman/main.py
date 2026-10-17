@@ -61,9 +61,9 @@ def select_spool_in_octoprint(octoprint_url, api_key, spool_id):
 
 def main():
     parser = argparse.ArgumentParser(description="OctoPi RFID Spoolman Link")
-    parser.add_or_argument("--spoolman", required=True, help="Spoolman Server URL (z.B. http://jarvis:8000)")
-    parser.add_or_argument("--octoprint", default="http://localhost:5000", help="OctoPrint URL")
-    parser.add_or_argument("--apikey", required=True, help="OctoPrint Globaler API-Key")
+    parser.add_argument("--spoolman", required=True, help="Spoolman Server URL (z.B. http://jarvis:8000)")
+    parser.add_argument("--octoprint", default="http://localhost:5000", help="OctoPrint URL")
+    parser.add_argument("--apikey", required=True, help="OctoPrint Globaler API-Key")
     args = parser.parse_args()
 
     reader = SimpleMFRC522()
