@@ -12,6 +12,7 @@ class RfidSpoolmanPlugin(
     octoprint.plugin.StartupPlugin,
     octoprint.plugin.ShutdownPlugin,
     octoprint.plugin.SettingsPlugin,
+    octoprint.plugin.TemplatePlugin,
 ):
     def __init__(self):
         self._stop_event = threading.Event()
@@ -26,11 +27,16 @@ class RfidSpoolmanPlugin(
             "octoprint_url": "http://localhost:5000",
         }
 
+    def get_template_configs(self):
+        return [
+            {"type": "settings", "name": "RFID Spoolman"},
+        ]
+
     def on_after_startup(self):
         api_key = self._settings.global_get(["api", "key"])
         if not api_key:
             self._logger.error(
-                "Kein OctoPrint-API-Key in den globalen Einstellungen gefunden; "
+                "Kein globaler OctoPrint-API-Key konfiguriert; "
                 "RFID-Plugin wird nicht gestartet."
             )
             return
@@ -59,16 +65,16 @@ class RfidSpoolmanPlugin(
             try:
                 uid_int = self._reader.read_id_no_block()
                 if not uid_int:
-                    time.sleep(0.2)
+                    self._stop_event.wait(0.2)
                     continue
 
                 current_hex = uid_to_hex(uid_int)
                 if not current_hex:
-                    time.sleep(0.2)
+                    self._stop_event.wait(0.2)
                     continue
 
                 if current_hex == self._last_uid:
-                    time.sleep(0.2)
+                    self._stop_event.wait(0.2)
                     continue
 
                 self._logger.info("RFID-Tag erkannt: %s", current_hex)
@@ -79,14 +85,14 @@ class RfidSpoolmanPlugin(
                         "Unbekannter RFID-Tag: %s – bitte in Spoolman zuordnen.",
                         current_hex,
                     )
-                    time.sleep(1.0)
+                    self._stop_event.wait(1.0)
                     continue
 
                 self._last_uid = current_hex
                 self._logger.info("Spoolman-Spule gefunden: %s", spool_id)
 
                 if spool_id == self._last_spool_id:
-                    time.sleep(0.2)
+                    self._stop_event.wait(0.2)
                     continue
 
                 self._logger.info("Aktiviere Spoolman-Spule %s in OctoPrint.", spool_id)
@@ -95,7 +101,7 @@ class RfidSpoolmanPlugin(
 
             except Exception:
                 self._logger.exception("Fehler in der RFID-Erkennung.")
-                time.sleep(1.0)
+                self._stop_event.wait(1.0)
 
     def on_shutdown(self):
         self._stop_event.set()
