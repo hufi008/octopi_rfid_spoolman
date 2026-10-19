@@ -16,6 +16,7 @@ Der Plugin-Code wird derzeit im Branch `plugin-development` entwickelt und ist n
 3. OctoPrint neu starten und prüfen, ob **RFID Spoolman** in den Plugins aktiviert ist.
 4. Unter **Einstellungen → RFID Spoolman** die Spoolman-URL und die OctoPrint-URL kontrollieren.
 5. In OctoPrint muss ein globaler API-Key konfiguriert sein; das Plugin verwendet diesen für die Spoolman-Plugin-API.
+6. Die linke Seitenleiste zeigt den RFID-Status, die erkannte UID und die Spoolman-Spulennummer. Nicht zugeordnete Tags erscheinen als **Unknown**.
 
 Der Plugin-Code greift auf den RC522 über `mfrc522` und `RPi.GPIO` zu. Die GPIO-/SPI-Unterstützung muss auf dem Raspberry Pi bereits eingerichtet sein.
 
