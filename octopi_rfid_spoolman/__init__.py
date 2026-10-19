@@ -27,7 +27,7 @@ class RfidSpoolmanPlugin(
 
     def get_settings_defaults(self):
         return {
-            "spoolman_url": "http://jarvis:8000",
+            "spoolman_url": "http://home-assistant.local:8000",
             "octoprint_url": "http://localhost:5000",
         }
 
