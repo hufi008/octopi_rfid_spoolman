@@ -92,7 +92,7 @@ class RfidSpoolmanPlugin(
             0.2, self._poll_reader, run_first=True, daemon=True
         )
         self._reader_timer.start()
-        self._logger.info("RFID-Spoolman-Plugin gestartet.")
+        self._logger.info("RFID-Spoolman-Plugin gestartet. Spoolman-URL: %s", self._spoolman_url)
 
     def _poll_reader(self):
         try:
@@ -116,7 +116,7 @@ class RfidSpoolmanPlugin(
             self._rfid_spool_id = None
 
             self._logger.info("RFID-Tag erkannt: %s", current_hex)
-            spool_id = find_spool_by_uid(self._spoolman_url, current_hex)
+            spool_id = find_spool_by_uid(self._spoolman_url, current_hex, logger=self._logger)
 
             if spool_id is None:
                 self._rfid_status = "unknown"
