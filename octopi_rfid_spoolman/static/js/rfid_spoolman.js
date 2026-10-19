@@ -31,13 +31,26 @@
                     color: style.color
                 });
 
-            $("#rfid-spoolman-uid").text(data.uid || "—");
-            $("#rfid-spoolman-spool").text(
-                data.spool_id === null || data.spool_id === undefined
-                    ? (status === "unknown" ? "Unknown" : "—")
-                    : "Nr. " + data.spool_id
-            );
-            $("#rfid-spoolman-message").text(data.message || "");
+            $("#rfid-spoolman-uid")
+                .text(data.uid || "—")
+                .css({
+                    display: "inline-block",
+                    padding: "2px 5px",
+                    "border-radius": "3px",
+                    "background-color": "#ffffff",
+                    color: "#212529"
+                });
+
+            var spoolText = "—";
+            if (status === "recognized" && data.spool_id !== null && data.spool_id !== undefined) {
+                spoolText = "Spule " + data.spool_id + " aktiviert";
+            } else if (status === "unknown") {
+                spoolText = "in Spoolman eintragen";
+            } else if (status === "error") {
+                spoolText = data.message || "Fehler";
+            }
+            $("#rfid-spoolman-spool").text(spoolText);
+            $("#rfid-spoolman-message").text("");
         }).fail(function () {
             $("#rfid-spoolman-status")
                 .text("Nicht erreichbar")
