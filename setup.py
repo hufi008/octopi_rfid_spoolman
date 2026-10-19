@@ -4,7 +4,7 @@ setup(
     name="octopi_rfid_spoolman",
     version="0.2.0",
     packages=find_packages(),
-    package_data={"octopi_rfid_spoolman": ["templates/*.jinja2"]},
+    package_data={"octopi_rfid_spoolman": ["templates/*.jinja2", "static/js/*.js"]},
     install_requires=[
         "requests",
         "spidev",
