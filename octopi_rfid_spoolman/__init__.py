@@ -1,3 +1,5 @@
+import time
+
 import octoprint.plugin
 import octoprint.util
 import RPi.GPIO as GPIO
@@ -20,6 +22,8 @@ class RfidSpoolmanPlugin(
         self._octoprint_url = None
         self._last_uid = None
         self._last_spool_id = None
+        self._last_attempt_uid = None
+        self._last_attempt_time = 0.0
 
     def get_settings_defaults(self):
         return {
@@ -63,6 +67,15 @@ class RfidSpoolmanPlugin(
             current_hex = uid_to_hex(uid_int)
             if not current_hex or current_hex == self._last_uid:
                 return
+
+            now = time.monotonic()
+            if (
+                current_hex == self._last_attempt_uid
+                and now - self._last_attempt_time < 2.0
+            ):
+                return
+            self._last_attempt_uid = current_hex
+            self._last_attempt_time = now
 
             self._logger.info("RFID-Tag erkannt: %s", current_hex)
             spool_id = find_spool_by_uid(self._spoolman_url, current_hex)
