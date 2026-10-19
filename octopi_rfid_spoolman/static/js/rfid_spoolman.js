@@ -12,13 +12,24 @@
                 unknown: "Unknown",
                 error: "Fehler"
             };
+            var colors = {
+                waiting: {background: "#e2e3e5", color: "#212529"},
+                recognized: {background: "#198754", color: "#ffffff"},
+                unknown: {background: "#ffda6a", color: "#212529"},
+                error: {background: "#dc3545", color: "#ffffff"}
+            };
+            var style = colors[status] || colors.waiting;
 
             $("#rfid-spoolman-status")
                 .text(labels[status] || status)
-                .removeClass("text-success text-warning text-error")
-                .addClass(status === "recognized" ? "text-success" :
-                    (status === "unknown" ? "text-warning" :
-                    (status === "error" ? "text-error" : "")));
+                .css({
+                    display: "inline-block",
+                    padding: "2px 7px",
+                    "border-radius": "4px",
+                    "font-weight": "bold",
+                    "background-color": style.background,
+                    color: style.color
+                });
 
             $("#rfid-spoolman-uid").text(data.uid || "—");
             $("#rfid-spoolman-spool").text(
@@ -28,7 +39,16 @@
             );
             $("#rfid-spoolman-message").text(data.message || "");
         }).fail(function () {
-            $("#rfid-spoolman-status").text("Nicht erreichbar");
+            $("#rfid-spoolman-status")
+                .text("Nicht erreichbar")
+                .css({
+                    display: "inline-block",
+                    padding: "2px 7px",
+                    "border-radius": "4px",
+                    "font-weight": "bold",
+                    "background-color": "#dc3545",
+                    color: "#ffffff"
+                });
             $("#rfid-spoolman-message").text("Status konnte nicht geladen werden.");
         });
     }
