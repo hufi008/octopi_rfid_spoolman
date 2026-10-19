@@ -1,7 +1,5 @@
-import threading
-import time
-
 import octoprint.plugin
+import octoprint.util
 import RPi.GPIO as GPIO
 from mfrc522 import SimpleMFRC522
 
@@ -15,9 +13,11 @@ class RfidSpoolmanPlugin(
     octoprint.plugin.TemplatePlugin,
 ):
     def __init__(self):
-        self._stop_event = threading.Event()
-        self._reader_thread = None
+        self._reader_timer = None
         self._reader = None
+        self._api_key = None
+        self._spoolman_url = None
+        self._octoprint_url = None
         self._last_uid = None
         self._last_spool_id = None
 
@@ -28,21 +28,19 @@ class RfidSpoolmanPlugin(
         }
 
     def get_template_configs(self):
-        return [
-            {"type": "settings", "name": "RFID Spoolman"},
-        ]
+        return [{"type": "settings", "name": "RFID Spoolman"}]
 
     def on_after_startup(self):
-        api_key = self._settings.global_get(["api", "key"])
-        if not api_key:
+        self._api_key = self._settings.global_get(["api", "key"])
+        if not self._api_key:
             self._logger.error(
                 "Kein globaler OctoPrint-API-Key konfiguriert; "
                 "RFID-Plugin wird nicht gestartet."
             )
             return
 
-        spoolman_url = self._settings.get(["spoolman_url"]).rstrip("/")
-        octoprint_url = self._settings.get(["octoprint_url"]).rstrip("/")
+        self._spoolman_url = self._settings.get(["spoolman_url"]).rstrip("/")
+        self._octoprint_url = self._settings.get(["octoprint_url"]).rstrip("/")
 
         try:
             self._reader = SimpleMFRC522()
@@ -50,67 +48,58 @@ class RfidSpoolmanPlugin(
             self._logger.exception("RFID-Leser konnte nicht initialisiert werden.")
             return
 
-        self._stop_event.clear()
-        self._reader_thread = threading.Thread(
-            target=self._reader_loop,
-            args=(spoolman_url, octoprint_url, api_key),
-            name="rfid-spoolman-reader",
-            daemon=True,
+        self._reader_timer = octoprint.util.RepeatedTimer(
+            0.2, self._poll_reader, run_first=True, daemon=True
         )
-        self._reader_thread.start()
+        self._reader_timer.start()
         self._logger.info("RFID-Spoolman-Plugin gestartet.")
 
-    def _reader_loop(self, spoolman_url, octoprint_url, api_key):
-        while not self._stop_event.is_set():
-            try:
-                uid_int = self._reader.read_id_no_block()
-                if not uid_int:
-                    self._stop_event.wait(0.2)
-                    continue
+    def _poll_reader(self):
+        try:
+            uid_int = self._reader.read_id_no_block()
+            if uid_int is None:
+                return
 
-                current_hex = uid_to_hex(uid_int)
-                if not current_hex:
-                    self._stop_event.wait(0.2)
-                    continue
+            current_hex = uid_to_hex(uid_int)
+            if not current_hex or current_hex == self._last_uid:
+                return
 
-                if current_hex == self._last_uid:
-                    self._stop_event.wait(0.2)
-                    continue
+            self._logger.info("RFID-Tag erkannt: %s", current_hex)
+            spool_id = find_spool_by_uid(self._spoolman_url, current_hex)
 
-                self._logger.info("RFID-Tag erkannt: %s", current_hex)
-                spool_id = find_spool_by_uid(spoolman_url, current_hex)
+            if spool_id is None:
+                self._logger.warning(
+                    "Unbekannter RFID-Tag: %s – bitte in Spoolman zuordnen.",
+                    current_hex,
+                )
+                return
 
-                if spool_id is None:
-                    self._logger.warning(
-                        "Unbekannter RFID-Tag: %s – bitte in Spoolman zuordnen.",
-                        current_hex,
-                    )
-                    self._stop_event.wait(1.0)
-                    continue
+            self._logger.info("Spoolman-Spule gefunden: %s", spool_id)
 
+            if spool_id == self._last_spool_id:
                 self._last_uid = current_hex
-                self._logger.info("Spoolman-Spule gefunden: %s", spool_id)
+                return
 
-                if spool_id == self._last_spool_id:
-                    self._stop_event.wait(0.2)
-                    continue
+            self._logger.info("Aktiviere Spoolman-Spule %s in OctoPrint.", spool_id)
+            if select_spool_in_octoprint(
+                self._octoprint_url, self._api_key, spool_id
+            ):
+                self._last_spool_id = spool_id
+                self._last_uid = current_hex
 
-                self._logger.info("Aktiviere Spoolman-Spule %s in OctoPrint.", spool_id)
-                if select_spool_in_octoprint(octoprint_url, api_key, spool_id):
-                    self._last_spool_id = spool_id
-
-            except Exception:
-                self._logger.exception("Fehler in der RFID-Erkennung.")
-                self._stop_event.wait(1.0)
+        except Exception:
+            self._logger.exception("Fehler bei der RFID-Tag-Abfrage.")
 
     def on_shutdown(self):
-        self._stop_event.set()
-        if self._reader_thread is not None:
-            self._reader_thread.join(timeout=2.0)
+        if self._reader_timer is not None:
+            self._reader_timer.cancel()
+            self._reader_timer.join(timeout=2.0)
+
         try:
             GPIO.cleanup()
         except Exception:
             self._logger.exception("Fehler beim Aufräumen der GPIO-Ressourcen.")
+
         self._logger.info("RFID-Spoolman-Plugin beendet.")
 
 
