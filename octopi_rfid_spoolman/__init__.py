@@ -13,6 +13,8 @@ class RfidSpoolmanPlugin(
     octoprint.plugin.ShutdownPlugin,
     octoprint.plugin.SettingsPlugin,
     octoprint.plugin.TemplatePlugin,
+    octoprint.plugin.SimpleApiPlugin,
+    octoprint.plugin.AssetPlugin,
 ):
     def __init__(self):
         self._reader_timer = None
@@ -24,6 +26,10 @@ class RfidSpoolmanPlugin(
         self._last_spool_id = None
         self._last_attempt_uid = None
         self._last_attempt_time = 0.0
+        self._rfid_status = "waiting"
+        self._rfid_message = "Warte auf RFID-Tag"
+        self._rfid_uid = None
+        self._rfid_spool_id = None
 
     def get_settings_defaults(self):
         return {
@@ -32,11 +38,30 @@ class RfidSpoolmanPlugin(
         }
 
     def get_template_configs(self):
-        return [{"type": "settings", "name": "RFID Spoolman"}]
+        return [
+            {"type": "settings", "name": "RFID Spoolman"},
+            {"type": "sidebar", "name": "RFID Spoolman", "custom_bindings": False},
+        ]
+
+    def get_assets(self):
+        return {"js": ["js/rfid_spoolman.js"]}
+
+    def get_api_commands(self):
+        return {}
+
+    def on_api_get(self, request):
+        return {
+            "status": self._rfid_status,
+            "message": self._rfid_message,
+            "uid": self._rfid_uid,
+            "spool_id": self._rfid_spool_id,
+        }
 
     def on_after_startup(self):
         self._api_key = self._settings.global_get(["api", "key"])
         if not self._api_key:
+            self._rfid_status = "error"
+            self._rfid_message = "Kein globaler OctoPrint-API-Key konfiguriert"
             self._logger.error(
                 "Kein globaler OctoPrint-API-Key konfiguriert; "
                 "RFID-Plugin wird nicht gestartet."
@@ -49,9 +74,13 @@ class RfidSpoolmanPlugin(
         try:
             self._reader = SimpleMFRC522()
         except Exception:
+            self._rfid_status = "error"
+            self._rfid_message = "RFID-Leser konnte nicht initialisiert werden"
             self._logger.exception("RFID-Leser konnte nicht initialisiert werden.")
             return
 
+        self._rfid_status = "waiting"
+        self._rfid_message = "Warte auf RFID-Tag"
         self._reader_timer = octoprint.util.RepeatedTimer(
             0.2, self._poll_reader, run_first=True, daemon=True
         )
@@ -76,20 +105,27 @@ class RfidSpoolmanPlugin(
                 return
             self._last_attempt_uid = current_hex
             self._last_attempt_time = now
+            self._rfid_uid = current_hex
+            self._rfid_spool_id = None
 
             self._logger.info("RFID-Tag erkannt: %s", current_hex)
             spool_id = find_spool_by_uid(self._spoolman_url, current_hex)
 
             if spool_id is None:
+                self._rfid_status = "unknown"
+                self._rfid_message = "Unknown – muss in Spoolman eingetragen werden"
                 self._logger.warning(
                     "Unbekannter RFID-Tag: %s – bitte in Spoolman zuordnen.",
                     current_hex,
                 )
                 return
 
+            self._rfid_spool_id = spool_id
             self._logger.info("Spoolman-Spule gefunden: %s", spool_id)
 
             if spool_id == self._last_spool_id:
+                self._rfid_status = "recognized"
+                self._rfid_message = "Spule erkannt und bereits aktiv"
                 self._last_uid = current_hex
                 return
 
@@ -99,8 +135,15 @@ class RfidSpoolmanPlugin(
             ):
                 self._last_spool_id = spool_id
                 self._last_uid = current_hex
+                self._rfid_status = "recognized"
+                self._rfid_message = "Spule erkannt und in OctoPrint aktiviert"
+            else:
+                self._rfid_status = "error"
+                self._rfid_message = "Spule gefunden, Aktivierung in OctoPrint fehlgeschlagen"
 
         except Exception:
+            self._rfid_status = "error"
+            self._rfid_message = "Fehler bei der RFID-/Spoolman-Abfrage"
             self._logger.exception("Fehler bei der RFID-Tag-Abfrage.")
 
     def on_shutdown(self):
