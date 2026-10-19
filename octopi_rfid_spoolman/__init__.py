@@ -37,6 +37,13 @@ class RfidSpoolmanPlugin(
             "octoprint_url": "http://localhost:5000",
         }
 
+    def on_settings_save(self, data):
+        octoprint.plugin.SettingsPlugin.on_settings_save(self, data)
+        for key in ("spoolman_url", "octoprint_url"):
+            if key in data and isinstance(data[key], str):
+                self._settings.set([key], data[key].strip().rstrip("/"))
+        self._settings.save()
+
     def get_template_configs(self):
         return [
             {"type": "settings", "name": "RFID Spoolman"},
