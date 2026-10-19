@@ -23,21 +23,51 @@ def uid_to_hex(uid_integer):
         print("⚠️ RFID-Lesefehler: BCC-Prüfung fehlgeschlagen!", flush=True)
         return None
 
-def find_spool_by_uid(spoolman_url, card_uid):
+def find_spool_by_uid(spoolman_url, card_uid, logger=None):
     url = f"{spoolman_url}/api/v1/spool"
     params = {"extra.card_uids": card_uid}
     try:
         res = requests.get(url, params=params, timeout=5)
+        if logger:
+            logger.info(
+                "Spoolman-Abfrage: GET %s -> HTTP %s",
+                res.url,
+                res.status_code,
+            )
         if res.status_code == 200:
             spools = res.json()
-            if spools and len(spools) > 0:
-                return spools[0]["id"]
+            if spools:
+                spool_id = spools[0]["id"]
+                if logger:
+                    logger.info(
+                        "Spoolman-Abfrage für UID %s: Spule %s gefunden (Treffer: %s).",
+                        card_uid,
+                        spool_id,
+                        len(spools),
+                    )
+                return spool_id
+            if logger:
+                logger.warning(
+                    "Spoolman-Abfrage für UID %s: HTTP 200, aber keine Treffer.",
+                    card_uid,
+                )
             else:
                 print(f"Keine Spule mit der UID {card_uid} in Spoolman gefunden.", flush=True)
         else:
-            print(f"Spoolman API Fehler: {res.status_code}", flush=True)
+            if logger:
+                logger.error(
+                    "Spoolman-API-Fehler für UID %s: HTTP %s; Antwort: %s",
+                    card_uid,
+                    res.status_code,
+                    res.text[:300],
+                )
+            else:
+                print(f"Spoolman API Fehler: {res.status_code}", flush=True)
     except Exception as e:
-        print(f"Verbindung zu Spoolman fehlgeschlagen: {e}", flush=True)
+        if logger:
+            logger.exception("Spoolman-Abfrage für UID %s fehlgeschlagen.", card_uid)
+        else:
+            print(f"Verbindung zu Spoolman fehlgeschlagen: {e}", flush=True)
     return None
 
 def select_spool_in_octoprint(octoprint_url, api_key, spool_id):
