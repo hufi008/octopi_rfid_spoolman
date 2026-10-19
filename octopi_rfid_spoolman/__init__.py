@@ -75,8 +75,21 @@ class RfidSpoolmanPlugin(
             )
             return
 
-        self._spoolman_url = self._settings.get(["spoolman_url"]).rstrip("/")
-        self._octoprint_url = self._settings.get(["octoprint_url"]).rstrip("/")
+        self._spoolman_url = (self._settings.get(["spoolman_url"]) or "").strip().rstrip("/")
+        self._octoprint_url = (self._settings.get(["octoprint_url"]) or "http://localhost:5000").strip().rstrip("/")
+
+        # If the RFID plugin has never saved its own URL, reuse the URL
+        # already configured by OctoPrint's Spoolman plugin.
+        if not self._spoolman_url or self._spoolman_url == "http://home-assistant.local:8000":
+            configured_spoolman_url = self._settings.global_get(
+                ["plugins", "Spoolman", "spoolmanUrl"]
+            )
+            if isinstance(configured_spoolman_url, str) and configured_spoolman_url.strip():
+                self._spoolman_url = configured_spoolman_url.strip().rstrip("/")
+                self._logger.warning(
+                    "Keine eigene Spoolman-URL gespeichert; verwende die URL aus dem Spoolman-Plugin: %s",
+                    self._spoolman_url,
+                )
 
         try:
             self._reader = SimpleMFRC522()
