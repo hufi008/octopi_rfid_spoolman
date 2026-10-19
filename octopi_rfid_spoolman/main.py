@@ -27,7 +27,7 @@ def find_spool_by_uid(spoolman_url, card_uid):
     url = f"{spoolman_url}/api/v1/spool"
     params = {"extra.card_uids": card_uid}
     try:
-        res = requests.get(url, params=params)
+        res = requests.get(url, params=params, timeout=5)
         if res.status_code == 200:
             spools = res.json()
             if spools and len(spools) > 0:
@@ -51,7 +51,7 @@ def select_spool_in_octoprint(octoprint_url, api_key, spool_id):
         "spoolId": int(spool_id)
     }
     try:
-        res = requests.post(url, json=payload, headers=headers)
+        res = requests.post(url, json=payload, headers=headers, timeout=5)
         if res.status_code == 200 or res.status_code == 204:
             print(f"-> Erfolgreich! Spule {spool_id} ist jetzt aktiv in OctoPrint.", flush=True)
             return True
