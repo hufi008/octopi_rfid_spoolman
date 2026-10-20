@@ -27,6 +27,7 @@ class RfidSpoolmanPlugin(
         self._last_attempt_uid = None
         self._last_attempt_time = 0.0
         self._rfid_status = "waiting"
+        self._reader_status = "starting"
         self._rfid_message = "Warte auf RFID-Tag"
         self._rfid_uid = None
         self._rfid_spool_id = None
@@ -58,7 +59,9 @@ class RfidSpoolmanPlugin(
 
     def on_api_get(self, request):
         return {
-            "status": self._rfid_status,
+            "status": self._reader_status,
+            "reader_status": self._reader_status,
+            "card_status": self._rfid_status,
             "message": self._rfid_message,
             "uid": self._rfid_uid,
             "spool_id": self._rfid_spool_id,
@@ -67,6 +70,7 @@ class RfidSpoolmanPlugin(
     def on_after_startup(self):
         self._api_key = self._settings.global_get(["api", "key"])
         if not self._api_key:
+            self._reader_status = "error"
             self._rfid_status = "error"
             self._rfid_message = "Kein globaler OctoPrint-API-Key konfiguriert"
             self._logger.error(
@@ -94,11 +98,13 @@ class RfidSpoolmanPlugin(
         try:
             self._reader = SimpleMFRC522()
         except Exception:
+            self._reader_status = "error"
             self._rfid_status = "error"
             self._rfid_message = "RFID-Leser konnte nicht initialisiert werden"
             self._logger.exception("RFID-Leser konnte nicht initialisiert werden.")
             return
 
+        self._reader_status = "online"
         self._rfid_status = "waiting"
         self._rfid_message = "Warte auf RFID-Tag"
         self._reader_timer = octoprint.util.RepeatedTimer(
@@ -110,11 +116,14 @@ class RfidSpoolmanPlugin(
     def _poll_reader(self):
         try:
             uid_int = self._reader.read_id_no_block()
+            self._reader_status = "online"
             if uid_int is None:
                 return
 
             current_hex = uid_to_hex(uid_int)
-            if not current_hex or current_hex == self._last_uid:
+            if not current_hex:
+                return
+            if current_hex == self._last_uid and self._rfid_status == "recognized":
                 return
 
             now = time.monotonic()
@@ -162,6 +171,7 @@ class RfidSpoolmanPlugin(
                 self._rfid_message = "Spule gefunden, Aktivierung in OctoPrint fehlgeschlagen"
 
         except Exception:
+            self._reader_status = "error"
             self._rfid_status = "error"
             self._rfid_message = "Fehler bei der RFID-/Spoolman-Abfrage"
             self._logger.exception("Fehler bei der RFID-Tag-Abfrage.")
