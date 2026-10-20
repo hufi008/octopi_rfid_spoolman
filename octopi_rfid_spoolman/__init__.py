@@ -117,6 +117,14 @@ class RfidSpoolmanPlugin(
         try:
             uid_int = self._reader.read_id_no_block()
             self._reader_status = "online"
+        except Exception:
+            self._reader_status = "error"
+            self._rfid_status = "error"
+            self._rfid_message = "Fehler beim Lesen des RFID-Lesers"
+            self._logger.exception("Fehler beim Lesen des RC522-RFID-Lesers.")
+            return
+
+        try:
             if uid_int is None:
                 return
 
@@ -171,10 +179,9 @@ class RfidSpoolmanPlugin(
                 self._rfid_message = "Spule gefunden, Aktivierung in OctoPrint fehlgeschlagen"
 
         except Exception:
-            self._reader_status = "error"
             self._rfid_status = "error"
             self._rfid_message = "Fehler bei der RFID-/Spoolman-Abfrage"
-            self._logger.exception("Fehler bei der RFID-Tag-Abfrage.")
+            self._logger.exception("Fehler bei der Verarbeitung des RFID-Tags.")
 
     def on_shutdown(self):
         if self._reader_timer is not None:
