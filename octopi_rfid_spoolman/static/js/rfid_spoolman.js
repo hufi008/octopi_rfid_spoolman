@@ -5,20 +5,19 @@
         }
 
         OctoPrint.simpleApiGet("rfid_spoolman").done(function (data) {
-            var status = data.status || "waiting";
+            var status = data.reader_status || data.status || "starting";
+            var cardStatus = data.card_status || "waiting";
             var labels = {
-                waiting: "Bereit",
-                recognized: "Erkannt",
-                unknown: "Unknown",
+                starting: "Startet",
+                online: "Online",
                 error: "Fehler"
             };
             var colors = {
-                waiting: {background: "#e2e3e5", color: "#212529"},
-                recognized: {background: "#198754", color: "#ffffff"},
-                unknown: {background: "#ffda6a", color: "#212529"},
+                starting: {background: "#e2e3e5", color: "#212529"},
+                online: {background: "#198754", color: "#ffffff"},
                 error: {background: "#dc3545", color: "#ffffff"}
             };
-            var style = colors[status] || colors.waiting;
+            var style = colors[status] || colors.starting;
 
             $("#rfid-spoolman-status")
                 .text(labels[status] || status)
@@ -42,11 +41,11 @@
                 });
 
             var spoolText = "—";
-            if (status === "recognized" && data.spool_id !== null && data.spool_id !== undefined) {
+            if (cardStatus === "recognized" && data.spool_id !== null && data.spool_id !== undefined) {
                 spoolText = "Spule " + data.spool_id + " aktiviert";
-            } else if (status === "unknown") {
+            } else if (cardStatus === "unknown") {
                 spoolText = "in Spoolman eintragen";
-            } else if (status === "error") {
+            } else if (cardStatus === "error") {
                 spoolText = data.message || "Fehler";
             }
             $("#rfid-spoolman-spool").text(spoolText);
