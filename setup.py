@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="octopi_rfid_spoolman",
-    version="0.2.3",
+    version="0.2.4",
     packages=find_packages(),
     package_data={"octopi_rfid_spoolman": ["templates/*.jinja2", "static/js/*.js"]},
     install_requires=[
