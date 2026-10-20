@@ -57,6 +57,10 @@ class RfidSpoolmanPlugin(
     def get_api_commands(self):
         return {}
 
+    def is_api_protected(self):
+        # The status endpoint is only intended for authenticated OctoPrint users.
+        return True
+
     def on_api_get(self, request):
         return {
             "status": self._reader_status,
