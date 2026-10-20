@@ -39,7 +39,7 @@ Der Plugin-Code befindet sich derzeit im Entwicklungszweig `plugin-development`.
 ## Konfiguration
 
 - **Spoolman-URL:** Basis-URL deiner Spoolman-Instanz, z. B. `http://home-assistant:8000`, sofern dieser Hostname in deinem Netzwerk erreichbar ist. Passe Hostname und Port an deine Installation an.
-- **OctoPrint-URL:** In einer normalen lokalen Installation ist `http://localhost:5000) ein üblicher Wert.
+- **OctoPrint-URL:** In einer normalen lokalen Installation ist `http://localhost:5000` ein üblicher Wert.
 - **API-Key:** Das Plugin verwendet den globalen API-Key aus der OctoPrint-Konfiguration.
 
 Die angezeigten Standardwerte sind Beispiele und funktionieren nicht automatisch in jedem Netzwerk.
