@@ -197,5 +197,25 @@ class RfidSpoolmanPlugin(
 
 
 __plugin_name__ = "RFID Spoolman"
+__plugin_version__ = "0.2.4"
 __plugin_pythoncompat__ = ">=3.11,<4"
 __plugin_implementation__ = RfidSpoolmanPlugin()
+
+
+def get_update_information(*args, **kwargs):
+    return {
+        "rfid_spoolman": {
+            "displayName": __plugin_name__,
+            "displayVersion": __plugin_version__,
+            "type": "github_release",
+            "current": __plugin_version__,
+            "user": "hufi008",
+            "repo": "octopi_rfid_spoolman",
+            "pip": "https://github.com/hufi008/octopi_rfid_spoolman/archive/{target}.zip",
+        }
+    }
+
+
+__plugin_hooks__ = {
+    "octoprint.plugin.softwareupdate.check_config": get_update_information,
+}
