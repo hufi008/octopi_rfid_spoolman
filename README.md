@@ -9,7 +9,8 @@ OctoPrint-Plugin zum Auslesen von RFID-Tags mit einem RC522-Leser und zum Aktivi
 - Zeigt RFID-Status, UID und Spuleninformationen in der Seitenleiste an.
 - Liest HX711-Rohwerte über physische GPIO-BOARD-Pins 38 (DOUT) und 40 (SCK).
 - Unterstützt Tara und Kalibrierung über ein bekanntes Gewicht.
-- Zeigt das gemessene Gewicht nur in OctoPrint an. Es werden keine Gewichtswerte an Spoolman geschrieben.
+- Rundet die lokale Gewichtsanzeige auf 2-g-Schritte; der ungerundete Messwert bleibt intern erhalten.
+- Überträgt das Gesamtgewicht der erkannten Spule automatisch an Spoolman. Spoolman berechnet daraus das verbleibende Filamentgewicht.
 
 ## Waage einrichten
 
@@ -21,6 +22,8 @@ OctoPrint-Plugin zum Auslesen von RFID-Tags mit einem RC522-Leser und zum Aktivi
 6. Kontrolliere, ob die Anzeige annähernd das bekannte Gewicht ergibt. Die Kalibrierung kann bei Bedarf wiederholt werden.
 
 Die Tara und der Kalibrierungsfaktor werden in den Plugin-Einstellungen gespeichert. Die Kalibrierung sollte nach Änderungen an der mechanischen Montage oder am Lastpfad überprüft werden.
+
+Wenn ein RFID-Tag einer Spule erkannt wurde, sendet das Plugin das ungerundete Gesamtgewicht an Spoolman (`PUT /api/v1/spool/{id}/measure`). Synchronisiert wird höchstens alle 30 Sekunden pro Spule und nur bei einer Änderung von mindestens 2 g. Messwerte unter 20 g werden ignoriert, damit eine unbelastete Plattform keine Spule als leer meldet.
 
 ## Voraussetzungen
 
@@ -38,4 +41,4 @@ Die Tara und der Kalibrierungsfaktor werden in den Plugin-Einstellungen gespeich
 
 ## Sicherheit und Umfang
 
-Das Plugin schreibt aktuell keine Messwerte an Spoolman. Die Waage dient zunächst ausschließlich der lokalen Anzeige und dem Feldtest. Veröffentliche deinen OctoPrint-API-Key nicht in Repository-Dateien, Screenshots oder Logs.
+Die Waage aktualisiert den Bestand der per RFID erkannten Spule in Spoolman anhand des gemessenen Gesamtgewichts. Veröffentliche deinen OctoPrint-API-Key nicht in Repository-Dateien, Screenshots oder Logs.
