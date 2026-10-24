@@ -20,6 +20,7 @@ class RfidSpoolmanPlugin(
     octoprint.plugin.TemplatePlugin,
     octoprint.plugin.SimpleApiPlugin,
     octoprint.plugin.AssetPlugin,
+    octoprint.plugin.EventHandlerPlugin,
 ):
     def __init__(self):
         self._reader_timer = None
@@ -45,6 +46,8 @@ class RfidSpoolmanPlugin(
         self._rfid_spool_id = None
         self._rfid_spool = None
         self._spoolman_sync_state = {}
+        self._printing = False
+        self._weight_samples = []
 
     def get_settings_defaults(self):
         return {
@@ -155,6 +158,10 @@ class RfidSpoolmanPlugin(
 
     def on_after_startup(self):
         self._api_key = self._settings.global_get(["api", "key"])
+        try:
+            self._printing = bool(self._printer.is_printing())
+        except Exception:
+            self._printing = False
         if not self._api_key:
             self._reader_status = "error"
             self._rfid_status = "error"
@@ -246,10 +253,40 @@ class RfidSpoolmanPlugin(
             self._hx711_status = "error"
             self._hx711_message = str(exc)
             self._logger.warning("HX711-Lesefehler: %s", exc)
+            return
 
-        # Send the unrounded gross spool weight; the UI rounds for readability.
-        if self._hx711_status == "online" and self._hx711_weight_g is not None:
-            self._sync_spoolman_weight(self._hx711_weight_g)
+        # Never synchronize a moving spool while a print is active. Require
+        # a stable 10-second window before treating the scale as absolute stock.
+        if self._hx711_weight_g is None:
+            return
+        now = time.monotonic()
+        self._weight_samples.append((now, self._hx711_weight_g))
+        self._weight_samples = [
+            (stamp, value) for stamp, value in self._weight_samples
+            if now - stamp <= 10.0
+        ]
+        if self._printing or len(self._weight_samples) < 8:
+            return
+        if now - self._weight_samples[0][0] < 8.0:
+            return
+        values = [value for _, value in self._weight_samples]
+        if max(values) - min(values) > 2.0:
+            return
+
+        stable_weight_g = sum(values) / len(values)
+        self._sync_spoolman_weight(stable_weight_g)
+
+    def on_event(self, event, payload):
+        if event == "PrintStarted":
+            self._printing = True
+            self._weight_samples.clear()
+            self._logger.info("Waagensynchronisierung während des Drucks pausiert.")
+        elif event in ("PrintDone", "PrintFailed", "PrintCancelled"):
+            self._printing = False
+            self._weight_samples.clear()
+            self._logger.info(
+                "Druck beendet; warte auf ein stabiles Waagengewicht vor Spoolman-Synchronisierung."
+            )
 
     def _sync_spoolman_weight(self, gross_weight_g):
         """Report a stable gross spool measurement to Spoolman at a low rate."""
