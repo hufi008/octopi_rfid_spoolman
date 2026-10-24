@@ -50,7 +50,7 @@
                 var initialWeight = Number(spool.initial_weight);
                 var remainingLength = Number(spool.remaining_length);
 
-                spoolHtml = "<p><strong>" + escapeHtml(title || ("Spule " + spool.id)) + "</strong></p>";
+                spoolHtml = "<p><strong>#" + escapeHtml(String(spool.id)) + " " + escapeHtml(title || "Unbekannte Spule") + "</strong></p>";
                 if (Number.isFinite(remainingWeight) && Number.isFinite(initialWeight)) {
                     spoolHtml += "<p><strong>" + remainingWeight.toFixed(1) + " g / " +
                         initialWeight.toFixed(0) + " g</strong></p>";
@@ -58,7 +58,6 @@
                 if (Number.isFinite(remainingLength)) {
                     spoolHtml += "<p>Restlänge: " + (remainingLength / 1000).toFixed(1) + " m</p>";
                 }
-                spoolHtml += "<small>Spule " + escapeHtml(String(spool.id)) + " aktiviert</small>";
             } else if (cardStatus === "unknown") {
                 spoolHtml = "<p>Unbekannter Tag – in Spoolman zuordnen.</p>";
             } else if (cardStatus === "error") {
