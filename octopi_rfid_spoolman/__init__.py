@@ -262,7 +262,8 @@ class RfidSpoolmanPlugin(
 
         try:
             gross_weight_g = float(gross_weight_g)
-            if not math.isfinite(gross_weight_g) or gross_weight_g < 0:
+            # An unloaded platform must never overwrite a spool as empty.
+            if not math.isfinite(gross_weight_g) or gross_weight_g < 20.0:
                 return
         except (TypeError, ValueError):
             return
