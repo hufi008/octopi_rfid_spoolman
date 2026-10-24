@@ -3,7 +3,7 @@ import time
 import octoprint.plugin
 import octoprint.util
 import RPi.GPIO as GPIO
-from mfrc522 import SimpleMFRC522
+from .rc522_reader import RC522Reader
 
 from .main import find_spool_by_uid, select_spool_in_octoprint, uid_to_hex
 
@@ -31,6 +31,7 @@ class RfidSpoolmanPlugin(
         self._rfid_message = "Warte auf RFID-Tag"
         self._rfid_uid = None
         self._rfid_spool_id = None
+        self._rfid_spool = None
 
     def get_settings_defaults(self):
         return {
@@ -69,6 +70,7 @@ class RfidSpoolmanPlugin(
             "message": self._rfid_message,
             "uid": self._rfid_uid,
             "spool_id": self._rfid_spool_id,
+            "spool": self._rfid_spool,
         }
 
     def on_after_startup(self):
@@ -100,7 +102,7 @@ class RfidSpoolmanPlugin(
                 )
 
         try:
-            self._reader = SimpleMFRC522()
+            self._reader = RC522Reader()
         except Exception:
             self._reader_status = "error"
             self._rfid_status = "error"
@@ -148,11 +150,12 @@ class RfidSpoolmanPlugin(
             self._last_attempt_time = now
             self._rfid_uid = current_hex
             self._rfid_spool_id = None
+            self._rfid_spool = None
 
             self._logger.info("RFID-Tag erkannt: %s", current_hex)
-            spool_id = find_spool_by_uid(self._spoolman_url, current_hex, logger=self._logger)
+            spool = find_spool_by_uid(self._spoolman_url, current_hex, logger=self._logger)
 
-            if spool_id is None:
+            if spool is None:
                 self._rfid_status = "unknown"
                 self._rfid_message = "Unknown – muss in Spoolman eingetragen werden"
                 self._logger.warning(
@@ -161,7 +164,17 @@ class RfidSpoolmanPlugin(
                 )
                 return
 
+            spool_id = spool["id"]
             self._rfid_spool_id = spool_id
+            self._rfid_spool = {
+                "id": spool_id,
+                "filament_name": (spool.get("filament") or {}).get("name"),
+                "material": (spool.get("filament") or {}).get("material"),
+                "vendor": ((spool.get("filament") or {}).get("vendor") or {}).get("name"),
+                "remaining_weight": spool.get("remaining_weight"),
+                "initial_weight": spool.get("initial_weight"),
+                "remaining_length": spool.get("remaining_length"),
+            }
             self._logger.info("Spoolman-Spule gefunden: %s", spool_id)
 
             if spool_id == self._last_spool_id:
@@ -201,7 +214,7 @@ class RfidSpoolmanPlugin(
 
 
 __plugin_name__ = "RFID Spoolman"
-__plugin_version__ = "0.2.4"
+__plugin_version__ = "0.2.5"
 __plugin_pythoncompat__ = ">=3.11,<4"
 __plugin_implementation__ = RfidSpoolmanPlugin()
 

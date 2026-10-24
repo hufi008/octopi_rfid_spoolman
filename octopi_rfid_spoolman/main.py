@@ -37,15 +37,15 @@ def find_spool_by_uid(spoolman_url, card_uid, logger=None):
         if res.status_code == 200:
             spools = res.json()
             if spools:
-                spool_id = spools[0]["id"]
+                spool = spools[0]
                 if logger:
                     logger.info(
                         "Spoolman-Abfrage für UID %s: Spule %s gefunden (Treffer: %s).",
                         card_uid,
-                        spool_id,
+                        spool["id"],
                         len(spools),
                     )
-                return spool_id
+                return spool
             if logger:
                 logger.warning(
                     "Spoolman-Abfrage für UID %s: HTTP 200, aber keine Treffer.",
@@ -120,13 +120,15 @@ def main():
 
             print(f"\nTag erkannt! HEX-UID: {current_hex}", flush=True)
 
-            spool_id = find_spool_by_uid(args.spoolman, current_hex)
+            spool = find_spool_by_uid(args.spoolman, current_hex)
 
             # Bei einem Fehler oder unbekannter UID später erneut versuchen
-            if spool_id is None:
+            if spool is None:
                 print(f"\n[WARN] Unbekannter Tag! UID: {current_hex} – Bitte in Spoolman zuordnen.", flush=True)
                 time.sleep(0.5)
                 continue
+
+            spool_id = spool["id"]
 
             # Erst nach erfolgreicher Spoolman-Abfrage als verarbeitet markieren
             last_uid = current_hex
