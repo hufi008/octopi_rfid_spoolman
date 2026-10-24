@@ -61,7 +61,7 @@
             $("#hx711-raw").text(Number.isFinite(Number(data.hx711_raw)) ? Math.round(Number(data.hx711_raw)) : "—");
             $("#hx711-weight").text(
                 data.hx711_calibrated && Number.isFinite(Number(data.hx711_weight_g))
-                    ? Number(data.hx711_weight_g).toFixed(1) + " g"
+                    ? (Math.round(Number(data.hx711_weight_g) / 2) * 2) + " g"
                     : "Nicht kalibriert"
             );
             var offsetText = Number.isFinite(Number(data.hx711_offset)) ? Math.round(Number(data.hx711_offset)) : "—";
