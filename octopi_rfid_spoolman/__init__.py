@@ -1,5 +1,8 @@
+import math
 import threading
 import time
+
+import requests
 
 import octoprint.plugin
 import octoprint.util
@@ -41,6 +44,7 @@ class RfidSpoolmanPlugin(
         self._rfid_uid = None
         self._rfid_spool_id = None
         self._rfid_spool = None
+        self._spoolman_sync_state = {}
 
     def get_settings_defaults(self):
         return {
@@ -243,6 +247,75 @@ class RfidSpoolmanPlugin(
             self._hx711_message = str(exc)
             self._logger.warning("HX711-Lesefehler: %s", exc)
 
+        # Send the unrounded gross spool weight; the UI rounds for readability.
+        if self._hx711_status == "online" and self._hx711_weight_g is not None:
+            self._sync_spoolman_weight(self._hx711_weight_g)
+
+    def _sync_spoolman_weight(self, gross_weight_g):
+        """Report a stable gross spool measurement to Spoolman at a low rate."""
+        if (
+            self._rfid_status != "recognized"
+            or self._rfid_spool_id is None
+            or not self._spoolman_url
+        ):
+            return
+
+        try:
+            gross_weight_g = float(gross_weight_g)
+            if not math.isfinite(gross_weight_g) or gross_weight_g < 0:
+                return
+        except (TypeError, ValueError):
+            return
+
+        spool_id = int(self._rfid_spool_id)
+        now = time.monotonic()
+        state = self._spoolman_sync_state.setdefault(spool_id, {})
+        last_attempt = state.get("last_attempt")
+        if last_attempt is not None and now - last_attempt < 30.0:
+            return
+        last_success_weight = state.get("last_success_weight")
+        if (
+            last_success_weight is not None
+            and abs(gross_weight_g - last_success_weight) < 2.0
+        ):
+            return
+
+        # Rate-limit failures too, so an unavailable Spoolman cannot flood the log.
+        state["last_attempt"] = now
+        try:
+            response = requests.put(
+                f"{self._spoolman_url}/api/v1/spool/{spool_id}/measure",
+                json={"weight": gross_weight_g},
+                timeout=5,
+            )
+            response.raise_for_status()
+            updated_spool = response.json()
+            state["last_success_weight"] = gross_weight_g
+            state["last_success_time"] = time.monotonic()
+
+            if self._rfid_spool_id == spool_id and self._rfid_spool is not None:
+                for key in ("remaining_weight", "initial_weight", "remaining_length"):
+                    if key in updated_spool:
+                        self._rfid_spool[key] = updated_spool[key]
+
+            remaining = updated_spool.get("remaining_weight")
+            if remaining is None:
+                self._logger.info(
+                    "Spoolman-Gewicht aktualisiert: Spule %s, Gesamtgewicht %.1f g",
+                    spool_id, gross_weight_g,
+                )
+            else:
+                self._logger.info(
+                    "Spoolman-Gewicht aktualisiert: Spule %s, Gesamtgewicht %.1f g, "
+                    "Restfilament %.1f g",
+                    spool_id, gross_weight_g, remaining,
+                )
+        except Exception as exc:
+            self._logger.warning(
+                "Spoolman-Gewicht für Spule %s konnte nicht aktualisiert werden: %s",
+                spool_id, exc,
+            )
+
     def _poll_reader(self):
         try:
             uid_int = self._reader.read_id_no_block()
@@ -331,7 +404,7 @@ class RfidSpoolmanPlugin(
 
 
 __plugin_name__ = "RFID Spoolman"
-__plugin_version__ = "0.3.0"
+__plugin_version__ = "0.4.0"
 __plugin_pythoncompat__ = ">=3.11,<4"
 __plugin_implementation__ = RfidSpoolmanPlugin()
 
