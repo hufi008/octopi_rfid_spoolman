@@ -23,7 +23,7 @@
 
 <hr>
 <h4>Filamentwaage (HX711)</h4>
-<p>DT/DOUT an physischem Pin 38, SCK/CLK an Pin 40. Die Waage wird zunächst nur angezeigt; es werden keine Gewichte an Spoolman geschrieben.</p>
+<p>DT/DOUT an physischem Pin 38, SCK/CLK an Pin 40. Sobald ein RFID-Tag einer Spule erkannt wurde, wird ihr gemessenes Gesamtgewicht automatisch an Spoolman übertragen. Spoolman berechnet daraus das verbleibende Filamentgewicht.</p>
 <p>Aktueller Status: <strong id="hx711-settings-status">Wird geladen …</strong></p>
 <p>Aktueller Rohwert: <code id="hx711-settings-raw">—</code></p>
 <p>Gespeicherte Tara: <code id="hx711-settings-offset">—</code></p>
@@ -44,4 +44,4 @@
     </div>
 </div>
 <p id="hx711-settings-message" class="help-block" aria-live="polite"></p>
-<p class="help-block">Tara und Kalibrierung werden lokal in den Plugin-Einstellungen gespeichert. Die Sidebar zeigt nur den laufenden Messstatus und das Gewicht.</p>
+<p class="help-block">Tara und Kalibrierung werden lokal gespeichert. Die Sidebar zeigt das Gewicht in 2-g-Schritten; an Spoolman wird der ungerundete Messwert übertragen. Synchronisiert wird höchstens alle 30 Sekunden und nur bei einer Änderung von mindestens 2 g.</p>
