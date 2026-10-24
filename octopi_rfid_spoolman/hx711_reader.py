@@ -68,15 +68,21 @@ class HX711Reader:
 
         self._wait_ready(timeout)
         value = 0
-        for _ in range(24):
-            GPIO.output(self.sck_pin, GPIO.HIGH)
-            value = (value << 1) | int(GPIO.input(self.dout_pin))
-            GPIO.output(self.sck_pin, GPIO.LOW)
+        try:
+            for _ in range(24):
+                GPIO.output(self.sck_pin, GPIO.HIGH)
+                try:
+                    value = (value << 1) | int(GPIO.input(self.dout_pin))
+                finally:
+                    GPIO.output(self.sck_pin, GPIO.LOW)
 
-        # The next pulse selects the gain/channel for the next conversion.
-        pulses = {128: 1, 32: 2, 64: 3}[self.gain]
-        for _ in range(pulses):
-            GPIO.output(self.sck_pin, GPIO.HIGH)
+            # The next pulse selects the gain/channel for the next conversion.
+            pulses = {128: 1, 32: 2, 64: 3}[self.gain]
+            for _ in range(pulses):
+                GPIO.output(self.sck_pin, GPIO.HIGH)
+                GPIO.output(self.sck_pin, GPIO.LOW)
+        finally:
+            # Never leave SCK high: a long high pulse powers the HX711 down.
             GPIO.output(self.sck_pin, GPIO.LOW)
 
         # Convert two's-complement 24-bit output to a signed Python integer.
