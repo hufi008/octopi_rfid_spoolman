@@ -23,7 +23,7 @@ OctoPrint-Plugin zum Auslesen von RFID-Tags mit einem RC522-Leser und zum Aktivi
 
 Die Tara und der Kalibrierungsfaktor werden in den Plugin-Einstellungen gespeichert. Die Kalibrierung sollte nach Änderungen an der mechanischen Montage oder am Lastpfad überprüft werden.
 
-Wenn ein RFID-Tag einer Spule erkannt wurde, sendet das Plugin das ungerundete Gesamtgewicht an Spoolman (`PUT /api/v1/spool/{id}/measure`). Während eines Drucks wird nicht synchronisiert, da sich die Spule auf dem SUNLU S1 bewegt. Nach dem Einlegen und nach Druckende wartet das Plugin auf mindestens 8 Sekunden stabile Messwerte. Synchronisiert wird höchstens alle 30 Sekunden pro Spule und nur bei einer Änderung von mindestens 2 g. Messwerte unter 20 g werden ignoriert, damit eine unbelastete Plattform keine Spule als leer meldet.
+Die Gewichtssynchronisierung wird gezielt durch zwei Ereignisse ausgelöst: wenn eine neue Spule tatsächlich in OctoPrint aktiviert wird, und nach Druckende (auch nach Abbruch oder Fehler). Für jedes Ereignis wartet das Plugin auf mindestens 8 Sekunden stabile Messwerte und sendet dann genau eine Messung des ungerundeten Gesamtgewichts an Spoolman (`PUT /api/v1/spool/{id}/measure`). Während eines Drucks wird nicht synchronisiert, da sich die Spule auf dem SUNLU S1 bewegt. Es gibt keine periodischen Synchronisierungen und keine automatischen Wiederholungen fehlgeschlagener API-Aufrufe. Messwerte unter 20 g werden ignoriert, damit eine unbelastete Plattform keine Spule als leer meldet.
 
 ## Voraussetzungen
 
