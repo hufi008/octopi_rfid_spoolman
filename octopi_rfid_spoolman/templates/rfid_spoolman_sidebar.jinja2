@@ -1,6 +1,19 @@
 <div id="rfid-spoolman-sidebar" class="rfid-spoolman-sidebar">
-    <p><strong>Status:</strong> <span id="rfid-spoolman-status">Wird geladen …</span> &nbsp; <strong>UID:</strong> <code id="rfid-spoolman-uid">—</code></p>
-    <div id="rfid-spoolman-spool">
-        <p>Keine Spule erkannt.</p>
+    <p><strong>RFID:</strong> <span id="rfid-spoolman-status">Wird geladen …</span></p>
+    <p><strong>UID:</strong> <code id="rfid-spoolman-uid">—</code></p>
+    <div id="rfid-spoolman-spool"><p>Keine Spule erkannt.</p></div>
+    <hr>
+    <h4>Filamentwaage</h4>
+    <p><strong>Status:</strong> <span id="hx711-status">Startet</span></p>
+    <p><strong>Rohwert:</strong> <code id="hx711-raw">—</code></p>
+    <p><strong>Tara:</strong> <code id="hx711-offset">—</code></p>
+    <p><strong>Gewicht:</strong> <strong id="hx711-weight">Nicht kalibriert</strong></p>
+    <p class="muted" id="hx711-message">HX711 wird gestartet</p>
+    <button type="button" class="btn btn-small" id="hx711-tare">Tara setzen</button>
+    <div style="margin-top:8px">
+        <label for="hx711-known-weight">Bekanntes Gewicht (g)</label>
+        <input id="hx711-known-weight" type="number" min="1" max="5000" step="0.1" value="120" style="width:90px">
+        <button type="button" class="btn btn-small" id="hx711-calibrate">Kalibrieren</button>
     </div>
+    <p class="muted" id="hx711-action-message" aria-live="polite"></p>
 </div>
