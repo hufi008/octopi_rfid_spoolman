@@ -1,10 +1,12 @@
+import threading
 import time
 
 import octoprint.plugin
 import octoprint.util
 import RPi.GPIO as GPIO
-from .rc522_reader import RC522Reader
 
+from .rc522_reader import RC522Reader
+from .hx711_reader import HX711Reader
 from .main import find_spool_by_uid, select_spool_in_octoprint, uid_to_hex
 
 
@@ -19,6 +21,13 @@ class RfidSpoolmanPlugin(
     def __init__(self):
         self._reader_timer = None
         self._reader = None
+        self._hx711_reader = None
+        self._hx711_timer = None
+        self._hx711_lock = threading.Lock()
+        self._hx711_status = "starting"
+        self._hx711_message = "HX711 wird gestartet"
+        self._hx711_raw = None
+        self._hx711_weight_g = None
         self._api_key = None
         self._spoolman_url = None
         self._octoprint_url = None
@@ -37,6 +46,8 @@ class RfidSpoolmanPlugin(
         return {
             "spoolman_url": "http://home-assistant.local:8000",
             "octoprint_url": "http://localhost:5000",
+            "hx711_offset": 0.0,
+            "hx711_reference_unit": 0.0,
         }
 
     def on_settings_save(self, data):
@@ -56,13 +67,16 @@ class RfidSpoolmanPlugin(
         return {"js": ["js/rfid_spoolman.js"]}
 
     def get_api_commands(self):
-        return {}
+        return {"tare": [], "calibrate": ["weight_g"]}
 
     def is_api_protected(self):
-        # The status endpoint is only intended for authenticated OctoPrint users.
         return True
 
     def on_api_get(self, request):
+        calibrated = (
+            self._hx711_reader is not None
+            and self._hx711_reader.reference_unit is not None
+        )
         return {
             "status": self._reader_status,
             "reader_status": self._reader_status,
@@ -71,7 +85,69 @@ class RfidSpoolmanPlugin(
             "uid": self._rfid_uid,
             "spool_id": self._rfid_spool_id,
             "spool": self._rfid_spool,
+            "hx711_status": self._hx711_status,
+            "hx711_message": self._hx711_message,
+            "hx711_raw": self._hx711_raw,
+            "hx711_weight_g": self._hx711_weight_g,
+            "hx711_offset": (
+                self._hx711_reader.offset if self._hx711_reader is not None else None
+            ),
+            "hx711_calibrated": calibrated,
+            "hx711_reference_unit": (
+                self._hx711_reader.reference_unit
+                if self._hx711_reader is not None else None
+            ),
         }
+
+    def on_api_command(self, command, data):
+        if self._hx711_reader is None:
+            return {"success": False, "message": "HX711 ist nicht verfügbar."}
+
+        try:
+            with self._hx711_lock:
+                if command == "tare":
+                    offset = self._hx711_reader.tare(samples=10)
+                    self._settings.set(["hx711_offset"], offset)
+                    self._settings.save()
+                    self._hx711_raw = offset
+                    self._hx711_weight_g = 0.0 if self._hx711_reader.reference_unit else None
+                    self._hx711_message = "Tara gespeichert"
+                    self._logger.info("HX711-Tara gespeichert: %.1f Rohwerte", offset)
+                    return {"success": True, "message": "Tara gespeichert."}
+
+                if command == "calibrate":
+                    try:
+                        weight_g = float(data.get("weight_g"))
+                    except (TypeError, ValueError):
+                        return {"success": False, "message": "Bitte ein Gewicht in Gramm eingeben."}
+                    if weight_g <= 0 or weight_g > 5000:
+                        return {"success": False, "message": "Gewicht muss zwischen 0 und 5000 g liegen."}
+                    raw = self._hx711_reader.read_average(samples=5)
+                    difference = raw - self._hx711_reader.offset
+                    if abs(difference) < 100:
+                        return {
+                            "success": False,
+                            "message": "Messdifferenz zu klein. Tara ohne Last setzen und bekanntes Gewicht auflegen.",
+                        }
+                    factor = difference / weight_g
+                    self._hx711_reader.reference_unit = factor
+                    self._settings.set(["hx711_reference_unit"], factor)
+                    self._settings.save()
+                    self._hx711_raw = raw
+                    self._hx711_weight_g = weight_g
+                    self._hx711_message = "Kalibrierung gespeichert"
+                    self._logger.info(
+                        "HX711 kalibriert: %.1f Rohwerte/g mit %.2f g Referenzgewicht",
+                        factor, weight_g,
+                    )
+                    return {"success": True, "message": "Kalibrierung gespeichert."}
+
+        except Exception as exc:
+            self._hx711_message = str(exc)
+            self._logger.exception("HX711-Aktion fehlgeschlagen.")
+            return {"success": False, "message": "HX711-Aktion fehlgeschlagen: " + str(exc)}
+
+        return {"success": False, "message": "Unbekannter Befehl."}
 
     def on_after_startup(self):
         self._api_key = self._settings.global_get(["api", "key"])
@@ -88,8 +164,6 @@ class RfidSpoolmanPlugin(
         self._spoolman_url = (self._settings.get(["spoolman_url"]) or "").strip().rstrip("/")
         self._octoprint_url = (self._settings.get(["octoprint_url"]) or "http://localhost:5000").strip().rstrip("/")
 
-        # If the RFID plugin has never saved its own URL, reuse the URL
-        # already configured by OctoPrint's Spoolman plugin.
         if not self._spoolman_url or self._spoolman_url == "http://home-assistant.local:8000":
             configured_spoolman_url = self._settings.global_get(
                 ["plugins", "Spoolman", "spoolmanUrl"]
@@ -117,7 +191,57 @@ class RfidSpoolmanPlugin(
             0.2, self._poll_reader, run_first=True, daemon=True
         )
         self._reader_timer.start()
+
+        # HX711 is independent: a scale error must not disable the RFID reader.
+        try:
+            offset = float(self._settings.get(["hx711_offset"]) or 0.0)
+            reference_unit = float(self._settings.get(["hx711_reference_unit"]) or 0.0)
+            self._hx711_reader = HX711Reader(
+                dout_pin=38,
+                sck_pin=40,
+                offset=offset,
+                reference_unit=reference_unit if reference_unit != 0 else None,
+                ready_timeout=2.0,
+            )
+            self._hx711_status = "online"
+            self._hx711_message = (
+                "Waage bereit" if self._hx711_reader.reference_unit
+                else "Rohwerte verfügbar – Tara und Kalibrierung erforderlich"
+            )
+            self._hx711_timer = octoprint.util.RepeatedTimer(
+                1.0, self._poll_hx711, run_first=True, daemon=True
+            )
+            self._hx711_timer.start()
+            self._logger.info("HX711 gestartet (DOUT BOARD 38, SCK BOARD 40).")
+        except Exception as exc:
+            self._hx711_status = "error"
+            self._hx711_message = str(exc)
+            self._logger.exception("HX711 konnte nicht initialisiert werden.")
+
         self._logger.info("RFID-Spoolman-Plugin gestartet. Spoolman-URL: %s", self._spoolman_url)
+
+    def _poll_hx711(self):
+        if self._hx711_reader is None:
+            return
+        try:
+            with self._hx711_lock:
+                raw = self._hx711_reader.read_average(samples=3, timeout=2.0)
+                self._hx711_raw = raw
+                if self._hx711_reader.reference_unit is not None:
+                    self._hx711_weight_g = (
+                        raw - self._hx711_reader.offset
+                    ) / self._hx711_reader.reference_unit
+                else:
+                    self._hx711_weight_g = None
+                self._hx711_status = "online"
+                self._hx711_message = (
+                    "Waage bereit" if self._hx711_reader.reference_unit is not None
+                    else "Noch nicht kalibriert"
+                )
+        except Exception as exc:
+            self._hx711_status = "error"
+            self._hx711_message = str(exc)
+            self._logger.warning("HX711-Lesefehler: %s", exc)
 
     def _poll_reader(self):
         try:
@@ -133,7 +257,6 @@ class RfidSpoolmanPlugin(
         try:
             if uid_int is None:
                 return
-
             current_hex = uid_to_hex(uid_int)
             if not current_hex:
                 return
@@ -141,10 +264,7 @@ class RfidSpoolmanPlugin(
                 return
 
             now = time.monotonic()
-            if (
-                current_hex == self._last_attempt_uid
-                and now - self._last_attempt_time < 2.0
-            ):
+            if current_hex == self._last_attempt_uid and now - self._last_attempt_time < 2.0:
                 return
             self._last_attempt_uid = current_hex
             self._last_attempt_time = now
@@ -154,14 +274,10 @@ class RfidSpoolmanPlugin(
 
             self._logger.info("RFID-Tag erkannt: %s", current_hex)
             spool = find_spool_by_uid(self._spoolman_url, current_hex, logger=self._logger)
-
             if spool is None:
                 self._rfid_status = "unknown"
                 self._rfid_message = "Unknown – muss in Spoolman eingetragen werden"
-                self._logger.warning(
-                    "Unbekannter RFID-Tag: %s – bitte in Spoolman zuordnen.",
-                    current_hex,
-                )
+                self._logger.warning("Unbekannter RFID-Tag: %s – bitte in Spoolman zuordnen.", current_hex)
                 return
 
             spool_id = spool["id"]
@@ -184,9 +300,7 @@ class RfidSpoolmanPlugin(
                 return
 
             self._logger.info("Aktiviere Spoolman-Spule %s in OctoPrint.", spool_id)
-            if select_spool_in_octoprint(
-                self._octoprint_url, self._api_key, spool_id
-            ):
+            if select_spool_in_octoprint(self._octoprint_url, self._api_key, spool_id):
                 self._last_spool_id = spool_id
                 self._last_uid = current_hex
                 self._rfid_status = "recognized"
@@ -194,27 +308,30 @@ class RfidSpoolmanPlugin(
             else:
                 self._rfid_status = "error"
                 self._rfid_message = "Spule gefunden, Aktivierung in OctoPrint fehlgeschlagen"
-
         except Exception:
             self._rfid_status = "error"
             self._rfid_message = "Fehler bei der RFID-/Spoolman-Abfrage"
             self._logger.exception("Fehler bei der Verarbeitung des RFID-Tags.")
 
     def on_shutdown(self):
-        if self._reader_timer is not None:
-            self._reader_timer.cancel()
-            self._reader_timer.join(timeout=2.0)
-
+        for timer in (self._reader_timer, self._hx711_timer):
+            if timer is not None:
+                timer.cancel()
+                timer.join(timeout=2.0)
+        if self._hx711_reader is not None:
+            try:
+                self._hx711_reader.close()
+            except Exception:
+                self._logger.exception("Fehler beim Schließen des HX711.")
         try:
             GPIO.cleanup()
         except Exception:
             self._logger.exception("Fehler beim Aufräumen der GPIO-Ressourcen.")
-
         self._logger.info("RFID-Spoolman-Plugin beendet.")
 
 
 __plugin_name__ = "RFID Spoolman"
-__plugin_version__ = "0.2.6"
+__plugin_version__ = "0.3.0"
 __plugin_pythoncompat__ = ">=3.11,<4"
 __plugin_implementation__ = RfidSpoolmanPlugin()
 
