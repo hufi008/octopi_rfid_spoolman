@@ -214,7 +214,7 @@ class RfidSpoolmanPlugin(
 
 
 __plugin_name__ = "RFID Spoolman"
-__plugin_version__ = "0.2.5"
+__plugin_version__ = "0.2.6"
 __plugin_pythoncompat__ = ">=3.11,<4"
 __plugin_implementation__ = RfidSpoolmanPlugin()
 
