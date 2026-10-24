@@ -3,7 +3,7 @@ import time
 import octoprint.plugin
 import octoprint.util
 import RPi.GPIO as GPIO
-from mfrc522 import SimpleMFRC522
+from .rc522_reader import RC522Reader
 
 from .main import find_spool_by_uid, select_spool_in_octoprint, uid_to_hex
 
@@ -100,7 +100,7 @@ class RfidSpoolmanPlugin(
                 )
 
         try:
-            self._reader = SimpleMFRC522()
+            self._reader = RC522Reader()
         except Exception:
             self._reader_status = "error"
             self._rfid_status = "error"
