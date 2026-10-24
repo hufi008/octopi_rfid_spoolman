@@ -45,9 +45,9 @@ class RfidSpoolmanPlugin(
         self._rfid_uid = None
         self._rfid_spool_id = None
         self._rfid_spool = None
-        self._spoolman_sync_state = {}
         self._printing = False
         self._weight_samples = []
+        self._weight_sync_pending = None
 
     def get_settings_defaults(self):
         return {
@@ -284,7 +284,14 @@ class RfidSpoolmanPlugin(
             return
 
         stable_weight_g = sum(values) / len(values)
-        self._sync_spoolman_weight(stable_weight_g)
+        if self._weight_sync_pending is None:
+            return
+
+        reason = self._weight_sync_pending
+        # Consume this event exactly once. A failed HTTP request is logged and
+        # is not retried automatically; a later activation/end event can sync again.
+        self._weight_sync_pending = None
+        self._sync_spoolman_weight(stable_weight_g, reason=reason)
 
     def on_event(self, event, payload):
         if event == "PrintStarted":
@@ -294,12 +301,13 @@ class RfidSpoolmanPlugin(
         elif event in ("PrintDone", "PrintFailed", "PrintCancelled"):
             self._printing = False
             self._weight_samples.clear()
+            self._weight_sync_pending = "Druckende"
             self._logger.info(
                 "Druck beendet; warte auf ein stabiles Waagengewicht vor Spoolman-Synchronisierung."
             )
 
-    def _sync_spoolman_weight(self, gross_weight_g):
-        """Report a stable gross spool measurement to Spoolman at a low rate."""
+    def _sync_spoolman_weight(self, gross_weight_g, reason="Ereignis"):
+        """Report one stable gross spool measurement to Spoolman for a specific event."""
         if (
             self._rfid_status != "recognized"
             or self._rfid_spool_id is None
@@ -316,20 +324,6 @@ class RfidSpoolmanPlugin(
             return
 
         spool_id = int(self._rfid_spool_id)
-        now = time.monotonic()
-        state = self._spoolman_sync_state.setdefault(spool_id, {})
-        last_attempt = state.get("last_attempt")
-        if last_attempt is not None and now - last_attempt < 30.0:
-            return
-        last_success_weight = state.get("last_success_weight")
-        if (
-            last_success_weight is not None
-            and abs(gross_weight_g - last_success_weight) < 2.0
-        ):
-            return
-
-        # Rate-limit failures too, so an unavailable Spoolman cannot flood the log.
-        state["last_attempt"] = now
         try:
             response = requests.put(
                 f"{self._spoolman_url}/api/v1/spool/{spool_id}/measure",
@@ -338,8 +332,6 @@ class RfidSpoolmanPlugin(
             )
             response.raise_for_status()
             updated_spool = response.json()
-            state["last_success_weight"] = gross_weight_g
-            state["last_success_time"] = time.monotonic()
 
             if self._rfid_spool_id == spool_id and self._rfid_spool is not None:
                 for key in ("remaining_weight", "initial_weight", "remaining_length"):
@@ -349,14 +341,14 @@ class RfidSpoolmanPlugin(
             remaining = updated_spool.get("remaining_weight")
             if remaining is None:
                 self._logger.info(
-                    "Spoolman-Gewicht aktualisiert: Spule %s, Gesamtgewicht %.1f g",
-                    spool_id, gross_weight_g,
+                    "Spoolman-Gewicht aktualisiert (%s): Spule %s, Gesamtgewicht %.1f g",
+                    reason, spool_id, gross_weight_g,
                 )
             else:
                 self._logger.info(
-                    "Spoolman-Gewicht aktualisiert: Spule %s, Gesamtgewicht %.1f g, "
+                    "Spoolman-Gewicht aktualisiert (%s): Spule %s, Gesamtgewicht %.1f g, "
                     "Restfilament %.1f g",
-                    spool_id, gross_weight_g, remaining,
+                    reason, spool_id, gross_weight_g, remaining,
                 )
         except Exception as exc:
             self._logger.warning(
@@ -426,6 +418,12 @@ class RfidSpoolmanPlugin(
                 self._last_uid = current_hex
                 self._rfid_status = "recognized"
                 self._rfid_message = "Spule erkannt und in OctoPrint aktiviert"
+                self._weight_samples.clear()
+                self._weight_sync_pending = "Spule aktiviert"
+                self._logger.info(
+                    "Spule %s aktiviert; warte auf stabile Messung für Spoolman-Synchronisierung.",
+                    spool_id,
+                )
             else:
                 self._rfid_status = "error"
                 self._rfid_message = "Spule gefunden, Aktivierung in OctoPrint fehlgeschlagen"
