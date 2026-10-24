@@ -64,8 +64,18 @@
                     ? Number(data.hx711_weight_g).toFixed(1) + " g"
                     : "Nicht kalibriert"
             );
-            $("#hx711-offset").text(
-                Number.isFinite(Number(data.hx711_offset)) ? Math.round(Number(data.hx711_offset)) : "—"
+            var offsetText = Number.isFinite(Number(data.hx711_offset)) ? Math.round(Number(data.hx711_offset)) : "—";
+            $("#hx711-offset, #hx711-settings-offset").text(offsetText);
+            $("#hx711-settings-status").text(
+                hxStatus === "online" ? "Online" : (hxStatus === "error" ? "Fehler" : "Startet")
+            );
+            $("#hx711-settings-raw").text(
+                Number.isFinite(Number(data.hx711_raw)) ? Math.round(Number(data.hx711_raw)) : "—"
+            );
+            $("#hx711-settings-calibration").text(
+                data.hx711_calibrated && Number.isFinite(Number(data.hx711_reference_unit))
+                    ? "Kalibriert"
+                    : "Nicht kalibriert"
             );
             $("#rfid-spoolman-message").text("");
         }).fail(function () {
@@ -77,13 +87,13 @@
     function runScaleCommand(command, payload) {
         OctoPrint.simpleApiCommand("rfid_spoolman", command, payload || {})
             .done(function (data) {
-                $("#hx711-action-message").text(data.message || "Aktion abgeschlossen.");
+                $("#hx711-settings-message").text(data.message || "Aktion abgeschlossen.");
                 updateStatus();
             })
             .fail(function (xhr) {
                 var message = "Aktion fehlgeschlagen.";
                 if (xhr.responseJSON && xhr.responseJSON.message) message = xhr.responseJSON.message;
-                $("#hx711-action-message").text(message);
+                $("#hx711-settings-message").text(message);
             });
     }
 
@@ -96,7 +106,7 @@
         $(document).on("click", "#hx711-calibrate", function () {
             var weight = parseFloat($("#hx711-known-weight").val());
             if (!Number.isFinite(weight) || weight <= 0) {
-                $("#hx711-action-message").text("Bitte das bekannte Gewicht in Gramm eingeben.");
+                $("#hx711-settings-message").text("Bitte das bekannte Gewicht in Gramm eingeben.");
                 return;
             }
             runScaleCommand("calibrate", {weight_g: weight});
