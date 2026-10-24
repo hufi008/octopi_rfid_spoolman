@@ -40,15 +40,33 @@
                     color: "#212529"
                 });
 
-            var spoolText = "—";
-            if (cardStatus === "recognized" && data.spool_id !== null && data.spool_id !== undefined) {
-                spoolText = "Spule " + data.spool_id + " aktiviert";
+            var spoolHtml = "";
+            if (cardStatus === "recognized" && data.spool) {
+                var spool = data.spool;
+                var name = [spool.material ? "[" + spool.material + "]" : "", spool.filament_name || ""]
+                    .filter(Boolean).join(" ");
+                var title = name + (spool.vendor ? " (" + spool.vendor + ")" : "");
+                var remainingWeight = Number(spool.remaining_weight);
+                var initialWeight = Number(spool.initial_weight);
+                var remainingLength = Number(spool.remaining_length);
+
+                spoolHtml = "<p><strong>" + escapeHtml(title || ("Spule " + spool.id)) + "</strong></p>";
+                if (Number.isFinite(remainingWeight) && Number.isFinite(initialWeight)) {
+                    spoolHtml += "<p><strong>" + remainingWeight.toFixed(1) + " g / " +
+                        initialWeight.toFixed(0) + " g</strong></p>";
+                }
+                if (Number.isFinite(remainingLength)) {
+                    spoolHtml += "<p>Restlänge: " + (remainingLength / 1000).toFixed(1) + " m</p>";
+                }
+                spoolHtml += "<small>Spule " + escapeHtml(String(spool.id)) + " aktiviert</small>";
             } else if (cardStatus === "unknown") {
-                spoolText = "in Spoolman eintragen";
+                spoolHtml = "<p>Unbekannter Tag – in Spoolman zuordnen.</p>";
             } else if (cardStatus === "error") {
-                spoolText = data.message || "Fehler";
+                spoolHtml = "<p>" + escapeHtml(data.message || "Fehler") + "</p>";
+            } else {
+                spoolHtml = "<p>Warte auf RFID-Tag.</p>";
             }
-            $("#rfid-spoolman-spool").text(spoolText);
+            $("#rfid-spoolman-spool").html(spoolHtml);
             $("#rfid-spoolman-message").text("");
         }).fail(function () {
             $("#rfid-spoolman-status")
@@ -63,6 +81,14 @@
                 });
             $("#rfid-spoolman-message").text("Status konnte nicht geladen werden.");
         });
+    }
+
+    function escapeHtml(value) {
+        return value.replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
     }
 
     $(function () {
