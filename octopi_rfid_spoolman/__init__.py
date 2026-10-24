@@ -255,6 +255,16 @@ class RfidSpoolmanPlugin(
             self._logger.warning("HX711-Lesefehler: %s", exc)
             return
 
+        # Cross-check the event flag with OctoPrint's live printer state. This
+        # also protects against a plugin restart while a print is already active.
+        try:
+            printer_is_printing = bool(self._printer.is_printing())
+            if printer_is_printing != self._printing:
+                self._printing = printer_is_printing
+                self._weight_samples.clear()
+        except Exception:
+            pass
+
         # Never synchronize a moving spool while a print is active. Require
         # a stable 10-second window before treating the scale as absolute stock.
         if self._hx711_weight_g is None:
