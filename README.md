@@ -10,7 +10,7 @@ OctoPrint-Plugin zum Auslesen von RFID-Tags mit einem RC522-Leser und zum Aktivi
 - Liest HX711-Rohwerte über physische GPIO-BOARD-Pins 38 (DOUT) und 40 (SCK).
 - Unterstützt Tara und Kalibrierung über ein bekanntes Gewicht.
 - Rundet die lokale Gewichtsanzeige auf 2-g-Schritte; der ungerundete Messwert bleibt intern erhalten.
-- Überträgt das Gesamtgewicht der erkannten Spule automatisch an Spoolman. Spoolman berechnet daraus das verbleibende Filamentgewicht.
+- Überträgt das Gesamtgewicht der erkannten Spule nur bei ruhendem Drucker und stabiler Waagenmessung an Spoolman. Spoolman berechnet daraus das verbleibende Filamentgewicht.
 
 ## Waage einrichten
 
@@ -23,7 +23,7 @@ OctoPrint-Plugin zum Auslesen von RFID-Tags mit einem RC522-Leser und zum Aktivi
 
 Die Tara und der Kalibrierungsfaktor werden in den Plugin-Einstellungen gespeichert. Die Kalibrierung sollte nach Änderungen an der mechanischen Montage oder am Lastpfad überprüft werden.
 
-Wenn ein RFID-Tag einer Spule erkannt wurde, sendet das Plugin das ungerundete Gesamtgewicht an Spoolman (`PUT /api/v1/spool/{id}/measure`). Synchronisiert wird höchstens alle 30 Sekunden pro Spule und nur bei einer Änderung von mindestens 2 g. Messwerte unter 20 g werden ignoriert, damit eine unbelastete Plattform keine Spule als leer meldet.
+Wenn ein RFID-Tag einer Spule erkannt wurde, sendet das Plugin das ungerundete Gesamtgewicht an Spoolman (`PUT /api/v1/spool/{id}/measure`). Während eines Drucks wird nicht synchronisiert, da sich die Spule auf dem SUNLU S1 bewegt. Nach dem Einlegen und nach Druckende wartet das Plugin auf mindestens 8 Sekunden stabile Messwerte. Synchronisiert wird höchstens alle 30 Sekunden pro Spule und nur bei einer Änderung von mindestens 2 g. Messwerte unter 20 g werden ignoriert, damit eine unbelastete Plattform keine Spule als leer meldet.
 
 ## Voraussetzungen
 
